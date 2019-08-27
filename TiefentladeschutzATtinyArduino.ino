@@ -3,15 +3,15 @@
 
 //Set Pins
 const int pinMosfet = 0;
-const int pinVoltage = A1;
-const int pinDebug = 4;
+const int pinVoltage = A3;
+//const int pinDebug = 4;
 const int pinEnableVoltage = 1;
 
 //Set Constants
 //Voltage divider: R1 = 27kOhm; R2 = 10kOhm; 0V = 0V; 5V = 18,5V
 const long shutdownVoltage = 12000L; //mV
 const long hysteresis = 1000L; //mV
-const long upperVoltage = 15714L; //mV
+const long upperVoltage = 18056L; //mV
 const int wdLoopCounter = 1; //Multiplier to the WD-Timer: loopCouter = 8 --> 8 x 8s = 64s to next wakeup
 
 //Set Variables
@@ -32,7 +32,7 @@ void setup() {
   pinMode(pinMosfet, OUTPUT);
   pinMode(pinEnableVoltage, OUTPUT);
   pinMode(pinVoltage, INPUT);
-  pinMode(pinDebug, OUTPUT); //Debugging only
+  //pinMode(pinDebug, OUTPUT); //Debugging only
 
   //Set WD-Timer & Sleep mode
   cli(); //Disable all interrupts
@@ -44,7 +44,7 @@ void setup() {
   sei(); //Enable all interrupts
 
   //Set pinEnableVoltage HIGH so it disconnects the voltage divider from the Analog Input pin to save power(P-Channel MOSFET)
-  digitalWrite(pinEnableVoltage, HIGH);
+  digitalWrite(pinEnableVoltage, LOW);
   
   goToSleep();
 }
@@ -53,20 +53,21 @@ void setup() {
 void loop() {
   if (wdCount >= wdLoopCounter) {
     //Connect the voltage divider to the ADC
-    digitalWrite(pinEnableVoltage, LOW);
+    digitalWrite(pinEnableVoltage, HIGH);
 
     //Read Analog Input
     delay(500); //Let the analogRead settle bevor reading it
     voltageRaw = analogRead(pinVoltage);
 
     //Disconnect the voltage divider from the ADC
-    digitalWrite(pinEnableVoltage, HIGH);
+    digitalWrite(pinEnableVoltage, LOW);
 
     //Calculate Voltage based on analog read
     voltageMapped = (voltageRaw * upperVoltage) / 1023L;
 
     blinkLed(10, 50);
-    blinkValue(voltageMapped);
+    //blinkValue(voltageMapped);
+    blinkValue(voltageRaw);
     blinkLed(10, 50);
 
     //Voltage has dipped under the Voltagelimit
@@ -105,7 +106,7 @@ void loop() {
 
     //Set MOSFET output
     digitalWrite(pinMosfet, !underVoltageTrip);
-    digitalWrite(pinDebug, !underVoltageTrip);
+    //digitalWrite(pinDebug, !underVoltageTrip);
 
     //Reset loop Counter
     wdCount = 0;
@@ -121,13 +122,15 @@ void loop() {
 void goToSleep() {
   byte adcsra;
 
- // adcsra = ADCSRA; //Saving ADC Control and Status Register A
- // ADCSRA &= ~(1 << ADEN); //Disable ADC
+  wdt_reset(); // Reset Watchdog Timer
+
+  adcsra = ADCSRA; //Saving ADC Control and Status Register A
+  ADCSRA &= ~(1 << ADEN); //Disable ADC
   MCUCR |= (1 << SM1) & ~(1 << SM0);//Sleep-Mode = Power Down
   MCUCR |= (1 << SE); //Set Sleep Enable
   sleep_cpu(); //sleep
   MCUCR &= ~(1 << SE); //Set Sleep Disable
- // ADCSRA = adcsra; //Set back ADC Control and Statur Register A
+  ADCSRA = adcsra; //Set back ADC Control and Statur Register A
 }
 
 //Interrupt routine
@@ -137,9 +140,9 @@ ISR(WDT_vect) {
 
 void blinkLed(int x, int y){
   for (int i = 0; i < x; i++) {
-    digitalWrite(pinDebug, HIGH);
+    digitalWrite(pinMosfet, HIGH);
     delay(y);
-    digitalWrite(pinDebug, LOW);
+    digitalWrite(pinMosfet, LOW);
     delay(y);
   }
 }
